@@ -1,14 +1,22 @@
 # bun-unpack
 
-Extract original source files from Bun-compiled executables by reconstructing sources from the embedded module graph + sourcemaps.
+[![CI](https://github.com/xpcmdshell/bun-unpack/actions/workflows/ci.yml/badge.svg)](https://github.com/xpcmdshell/bun-unpack/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Extract original source files from Bun-compiled executables.
+
+## How It Works
+
+When Bun compiles a project with `bun build --compile`, it embeds a module graph containing all bundled sources, their metadata, and sourcemaps into the resulting executable. This tool locates and parses that embedded data to reconstruct the original source files.
+
+For a detailed walkthrough of the binary format and extraction process, see the blog post: **[Dissecting Droid: Reversing Bun Executables](https://0day.gg/blog/dissecting-droid-reversing-bun-executables/)**
 
 ## Install
 
 ```bash
 uv tool install git+ssh://git@github.com/xpcmdshell/bun-unpack.git
 ```
-
-This installs `bun-unpack` globally via uv's tool management.
 
 ## Usage
 
@@ -28,7 +36,6 @@ uv run bun-unpack /path/to/executable
 uv run python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-## Notes
+## License
 
-- This tool expects a Bun executable produced via Bun's compile feature.
-- Output paths are derived from sourcemaps; some builds may include absolute paths.
+MIT
