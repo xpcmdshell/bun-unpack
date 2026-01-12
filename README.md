@@ -31,9 +31,8 @@ bun-unpack /path/to/executable --bundle -o out/
 ```bash
 git clone git@github.com:xpcmdshell/bun-unpack.git
 cd bun-unpack
-uv sync --frozen
-uv run bun-unpack /path/to/executable
-uv run python -m unittest discover -s tests -p "test_*.py" -v
+uv run bun-unpack /path/to/executable   # runs tool
+uv run python -m unittest discover tests # runs tests
 ```
 
 ## License
