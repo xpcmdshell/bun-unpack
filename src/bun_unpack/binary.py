@@ -29,13 +29,39 @@ def _init_lief() -> None:
 
 
 def extract_section_data_elf(file_bytes: bytes) -> bytes | None:
-    if len(file_bytes) < 8:
+    """Extract embedded data from ELF.
+
+    ELF structure at end of file:
+    [payload (byte_count bytes)] [Offsets (32 bytes)] [trailer (16 bytes)] [total_file_size (8 bytes)]
+
+    We return just the payload portion. The caller will find trailer/offsets at the end of it.
+    """
+    trailer = b"\n---- Bun! ----\n"
+
+    # Last 8 bytes = total file size (sanity check marker)
+    if len(file_bytes) < 8 + 16 + 32:
         return None
-    total_byte_count = struct.unpack("<Q", file_bytes[-8:])[0]
-    if total_byte_count > len(file_bytes) or total_byte_count < 64:
+
+    # Find trailer (it's 24 bytes from end: 16 trailer + 8 size)
+    trailer_start = len(file_bytes) - 8 - 16
+    if file_bytes[trailer_start : trailer_start + 16] != trailer:
         return None
-    start = len(file_bytes) - total_byte_count
-    return file_bytes[start:-8]
+
+    # Offsets are 32 bytes before trailer
+    offsets_start = trailer_start - 32
+
+    # byte_count is first 8 bytes of offsets
+    byte_count = struct.unpack("<Q", file_bytes[offsets_start : offsets_start + 8])[0]
+    if byte_count < 32 or byte_count > len(file_bytes):
+        return None
+
+    # Payload is byte_count bytes before offsets
+    payload_start = offsets_start - byte_count
+    if payload_start < 0:
+        return None
+
+    # Return payload + offsets + trailer (what the rest of the code expects)
+    return file_bytes[payload_start : trailer_start + 16]
 
 
 def extract_embedded_data(filepath: Path) -> tuple[bytes, Offsets, str] | None:
