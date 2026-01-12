@@ -24,7 +24,8 @@ class TestPaths(unittest.TestCase):
     def test_safe_join_stays_within_base(self):
         base = Path("/tmp/out")
         out = safe_join(base, "a/b/c.txt")
-        self.assertTrue(str(out).endswith("/tmp/out/a/b/c.txt"))
+        self.assertEqual(out.parts[-3:], ("a", "b", "c.txt"))
+        self.assertTrue(out.is_relative_to(base))
 
     def test_safe_join_prevents_escape(self):
         base = Path("/tmp/out")

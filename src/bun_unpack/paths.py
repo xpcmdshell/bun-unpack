@@ -55,12 +55,14 @@ def normalize_relative_path(untrusted_path: str) -> str:
     - Normalizes separators to '/'
     - Resolves '.' and '..' segments
     - Strips Windows drive letters
+    - Strips embedded null bytes (can arise from binary parsing)
 
     Raises UnsafePathError for empty paths or any attempt to escape above the
     output directory.
     """
 
-    path = _strip_known_prefixes(untrusted_path)
+    path = untrusted_path.replace("\x00", "")
+    path = _strip_known_prefixes(path)
 
     if "://" in path:
         path = path.split("://", 1)[1]
