@@ -5,16 +5,10 @@ Extract original source files from Bun-compiled executables by reconstructing so
 ## Install
 
 ```bash
-pip install bun-unpack
+uv tool install git+ssh://git@github.com/xpcmdshell/bun-unpack.git
 ```
 
-## Development
-
-```bash
-uv sync --frozen
-uv run bun-unpack /path/to/executable
-uv run python -m unittest discover -s tests -p "test_*.py" -v
-```
+This installs `bun-unpack` globally via uv's tool management.
 
 ## Usage
 
@@ -22,6 +16,16 @@ uv run python -m unittest discover -s tests -p "test_*.py" -v
 bun-unpack /path/to/executable
 bun-unpack /path/to/executable -o out/
 bun-unpack /path/to/executable --bundle -o out/
+```
+
+## Development
+
+```bash
+git clone git@github.com:xpcmdshell/bun-unpack.git
+cd bun-unpack
+uv sync --frozen
+uv run bun-unpack /path/to/executable
+uv run python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 ## Notes
