@@ -18,7 +18,14 @@ import lief
 from .paths import TRAILER
 from .types import Offsets
 
-lief.logging.disable()
+_lief_initialized = False
+
+
+def _init_lief() -> None:
+    global _lief_initialized
+    if not _lief_initialized:
+        lief.logging.disable()
+        _lief_initialized = True
 
 
 def extract_section_data_elf(file_bytes: bytes) -> bytes | None:
@@ -32,6 +39,7 @@ def extract_section_data_elf(file_bytes: bytes) -> bytes | None:
 
 
 def extract_embedded_data(filepath: Path) -> tuple[bytes, Offsets, str] | None:
+    _init_lief()
     raw_data = filepath.read_bytes()
 
     binary = lief.parse(str(filepath))
