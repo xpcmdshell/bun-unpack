@@ -11,18 +11,22 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 
-class Encoding(IntEnum):
+class _UnknownFallbackEnum(IntEnum):
+    """Base for enums that return UNKNOWN for unrecognized values."""
+
+    @classmethod
+    def _missing_(cls, value: object) -> "_UnknownFallbackEnum":
+        return cls.UNKNOWN  # type: ignore[attr-defined]
+
+
+class Encoding(_UnknownFallbackEnum):
     BINARY = 0
     LATIN1 = 1
     UTF8 = 2
     UNKNOWN = 255
 
-    @classmethod
-    def _missing_(cls, value: object) -> "Encoding":
-        return cls.UNKNOWN
 
-
-class Loader(IntEnum):
+class Loader(_UnknownFallbackEnum):
     JSX = 0
     JS = 1
     TS = 2
@@ -41,30 +45,18 @@ class Loader(IntEnum):
     HTML = 15
     UNKNOWN = 255
 
-    @classmethod
-    def _missing_(cls, value: object) -> "Loader":
-        return cls.UNKNOWN
 
-
-class ModuleFormat(IntEnum):
+class ModuleFormat(_UnknownFallbackEnum):
     NONE = 0
     ESM = 1
     CJS = 2
     UNKNOWN = 255
 
-    @classmethod
-    def _missing_(cls, value: object) -> "ModuleFormat":
-        return cls.UNKNOWN
 
-
-class FileSide(IntEnum):
+class FileSide(_UnknownFallbackEnum):
     SERVER = 0
     CLIENT = 1
     UNKNOWN = 255
-
-    @classmethod
-    def _missing_(cls, value: object) -> "FileSide":
-        return cls.UNKNOWN
 
 
 @dataclass(frozen=True)
