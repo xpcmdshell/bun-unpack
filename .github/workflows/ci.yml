@@ -26,3 +26,16 @@ jobs:
         run: |
           uv run python -m tools.build_compatibility
           uv run python -m unittest discover -s tests -v
+      - name: Preserve failing compatibility fixtures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-${{ matrix.os }}
+          retention-days: 3
+          compression-level: 9
+          path: |
+            build/compatibility/fixtures/0.6.0/assets/
+            build/compatibility/fixtures/1.0.0/assets/
+            build/compatibility/fixtures/1.1.0/assets/
+            build/compatibility/fixtures/1.1.22/sources/
+            build/compatibility/fixtures/1.1.30/sources/

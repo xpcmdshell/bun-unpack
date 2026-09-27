@@ -46,6 +46,9 @@ PROGRAM_SOURCES = (
 )
 ASSETS = ("assets/picture.svg", "assets/binary.png", "assets/empty.svg")
 WEB_INPUTS = ("web.ts", "web/client.ts", "web/index.html", "web/styles.css")
+# Observed omissions in these specific corpus releases, not a guessed release
+# boundary. The original input is still inventoried and the bundle is retained.
+EMPTY_ASSET_OMITTED_IN = frozenset({"1.1.0", "1.1.22", "1.1.29", "1.1.30", "1.2.0", "1.2.4"})
 
 
 def version_tuple(version: str) -> tuple[int, ...]:
@@ -114,7 +117,7 @@ def build_version(version: str, bun: Path, workspace: Path, environment: dict[st
             consumed = WEB_INPUTS
         consumed_hashes = {path: input_hashes[path] for path in consumed}
         fingerprint = hashlib.sha256(
-            json.dumps([4, version, case, flags, compiler_hash, consumed_hashes]).encode()
+            json.dumps([2, version, case, flags, compiler_hash, consumed_hashes]).encode()
         ).hexdigest()
         manifest_path = output / "expected.json"
         executable_name = "sample.exe" if platform.system() == "Windows" else "sample"
@@ -165,7 +168,18 @@ def build_version(version: str, bun: Path, workspace: Path, environment: dict[st
         source_warnings: list[str] = []
         if case == "assets":
             sources = ["assets.ts"]
+            if version in EMPTY_ASSET_OMITTED_IN:
+                assets.remove("assets/empty.svg")
+                unavailable_inputs["assets/empty.svg"] = (
+                    "Compiler omitted the empty asset's module and source-map entry"
+                )
+                transformed_inputs["assets/empty.svg"] = ["assets/empty.svg"]
             if version_tuple(version) < (1, 1, 22):
+                # The old module table omits the empty asset, but its complete
+                # contents survive in the legacy sourcemap as an original source.
+                if version not in EMPTY_ASSET_OMITTED_IN:
+                    assets.remove("assets/empty.svg")
+                    sources.append("assets/empty.svg")
                 source_warnings.append(
                     "Non-text source-map copy of assets/binary.png ignored; embedded assets retained"
                 )
@@ -182,13 +196,6 @@ def build_version(version: str, bun: Path, workspace: Path, environment: dict[st
             # the bundle's representation; do not pretend its formatting survived.
             sources.remove("src/data/settings.json")
             transformed_inputs["src/data/settings.json"] = ["JSON_MAGIC"]
-        # A zero-byte asset is packed by some compiler builds and not others.
-        # Its bytes must be exact if present, but their presence is not a
-        # bun-unpack guarantee, so it is not a required recovery.
-        optional_inputs = {}
-        if case == "assets":
-            assets.remove("assets/empty.svg")
-            optional_inputs["assets/empty.svg"] = input_hashes["assets/empty.svg"]
         asset_hashes = [input_hashes[path] for path in assets]
         if case == "web":
             # Independent oracle: ask our own fixture for the hashes of Bun's
@@ -223,7 +230,6 @@ def build_version(version: str, bun: Path, workspace: Path, environment: dict[st
             "executable_sha256": sha256(output / executable_name),
             "sources": {path: input_hashes[path] for path in sources},
             "assets": asset_hashes,
-            "optional_inputs": optional_inputs,
             "consumed_inputs": consumed_hashes,
             "transformed_inputs": transformed_inputs,
             "unavailable_inputs": unavailable_inputs,
