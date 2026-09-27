@@ -1,0 +1,2 @@
+// SOURCE_RECOVERY_COMMONJS
+module.exports = 'COMMONJS_MAGIC';

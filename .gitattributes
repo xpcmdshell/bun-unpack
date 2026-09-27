@@ -1,0 +1,2 @@
+# Compile identical fixture bytes on every host. Leave binary assets untouched.
+tests/fixtures/** text=auto eol=lf

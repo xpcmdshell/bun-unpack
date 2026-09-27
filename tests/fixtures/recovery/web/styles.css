@@ -1,0 +1,5 @@
+/* Preserve original CSS, not just minified output. */
+body {
+  color: rebeccapurple;
+  background: white;
+}

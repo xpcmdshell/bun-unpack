@@ -21,8 +21,7 @@ def _run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         check=True,
         text=True,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         timeout=60,
     )
 
@@ -37,7 +36,7 @@ def _read_textish(path: Path) -> str:
         return ""
     try:
         return path.read_bytes().decode("utf-8", errors="ignore")
-    except Exception:
+    except OSError:
         return ""
 
 
@@ -56,7 +55,7 @@ class TestIntegration(unittest.TestCase):
                 encoding="utf-8",
             )
             (td_path / "index.ts").write_text(
-                "import { dep } from './dep';\n" "console.log('INDEX_MAGIC:' + dep());\n",
+                "import { dep } from './dep';\nconsole.log('INDEX_MAGIC:' + dep());\n",
                 encoding="utf-8",
             )
 

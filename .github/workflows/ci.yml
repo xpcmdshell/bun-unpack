@@ -11,22 +11,31 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
+          python-version: "3.10"
       - uses: astral-sh/setup-uv@v3
-
       - name: Install
         run: uv sync --frozen
-
       - name: Test
-        run: uv run python -m unittest discover -s tests -p "test_*.py" -v
+        shell: bash
+        env:
+          BUN_UNPACK_REQUIRE_FIXTURES: "1"
+        run: |
+          uv run python -m tools.build_compatibility
+          uv run python -m unittest discover -s tests -v
+      - name: Preserve failing compatibility fixtures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-${{ matrix.os }}
+          retention-days: 3
+          compression-level: 9
+          path: |
+            build/compatibility/fixtures/0.6.0/assets/
+            build/compatibility/fixtures/1.0.0/assets/
+            build/compatibility/fixtures/1.1.0/assets/
+            build/compatibility/fixtures/1.1.22/sources/
+            build/compatibility/fixtures/1.1.30/sources/
