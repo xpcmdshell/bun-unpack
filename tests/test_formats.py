@@ -15,6 +15,7 @@ from bun_unpack.formats import load_graph
 
 FIXTURES = Path(os.environ.get("BUN_UNPACK_FIXTURES", "build/compatibility/fixtures"))
 NATIVE_CONTAINER = {"Darwin": "macho", "Linux": "elf", "Windows": "pe"}[platform.system()]
+EXECUTABLE = "sample.exe" if platform.system() == "Windows" else "sample"
 CROSS = FIXTURES.parent / "cross"
 RELEASES = (
     ("0.6.0", 32, 24),
@@ -77,10 +78,10 @@ def _modern_elf(optional: bytes, flags: int) -> bytes:
 
 class TestFormats(unittest.TestCase):
     def test_real_native_graphs(self) -> None:
-        if not any(FIXTURES.glob("*/sources/sample")):
+        if not any(FIXTURES.glob(f"*/sources/{EXECUTABLE}")):
             self.skipTest("Generate local corpus with python -m tools.build_compatibility")
         for version, stride, footer in RELEASES:
-            path = FIXTURES / version / "sources" / "sample"
+            path = FIXTURES / version / "sources" / EXECUTABLE
             if not path.exists():
                 continue
             with self.subTest(version=version):
@@ -119,7 +120,7 @@ class TestFormats(unittest.TestCase):
                 self.assertGreater(graph.modules[0].contents.size, 0)
 
     def test_real_asset_modules(self) -> None:
-        if not any(FIXTURES.glob("*/assets/sample")):
+        if not any(FIXTURES.glob(f"*/assets/{EXECUTABLE}")):
             self.skipTest("Assets fixtures not installed")
         for version, encoding in (
             ("0.6.0", "latin1"),
@@ -127,7 +128,7 @@ class TestFormats(unittest.TestCase):
             ("1.3.9", "binary"),
             ("1.4.2", "binary"),
         ):
-            path = FIXTURES / version / "assets" / "sample"
+            path = FIXTURES / version / "assets" / EXECUTABLE
             if not path.exists():
                 continue
             with self.subTest(version=version):
@@ -140,7 +141,7 @@ class TestFormats(unittest.TestCase):
                 self.assertTrue(any(asset.contents.size > 0 for asset in assets))
 
     def test_multi_module_graph_and_legacy_footer_padding(self) -> None:
-        path = FIXTURES / "1.3.0" / "splitting" / "sample"
+        path = FIXTURES / "1.3.0" / "splitting" / EXECUTABLE
         if not path.exists():
             self.skipTest("Splitting fixture not installed")
         graph = load_graph(path, Limits())
@@ -149,15 +150,15 @@ class TestFormats(unittest.TestCase):
         self.assertEqual(graph.format.footer_size, 32)
 
     def test_exec_argv_and_modern_bytecode_origin(self) -> None:
-        argv_path = FIXTURES / "1.4.2" / "exec-argv" / "sample"
-        bytecode_path = FIXTURES / "1.4.2" / "bytecode" / "sample"
+        argv_path = FIXTURES / "1.4.2" / "exec-argv" / EXECUTABLE
+        bytecode_path = FIXTURES / "1.4.2" / "bytecode" / EXECUTABLE
         if not argv_path.exists() or not bytecode_path.exists():
             self.skipTest("Modern fixtures not installed")
         self.assertTrue(load_graph(argv_path, Limits()).exec_argv)
         module = load_graph(bytecode_path, Limits()).modules[0]
         self.assertIsNotNone(module.bytecode)
         self.assertIsNotNone(module.bytecode_origin_path)
-        self.assertTrue(module.bytecode_origin_path.startswith("/$bunfs/"))
+        self.assertEqual(module.bytecode_origin_path, module.path)
 
     def test_legacy_nonzero_padding_and_embedded_nul(self) -> None:
         name = b"compiled://root/app.js\0"

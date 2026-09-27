@@ -39,6 +39,11 @@ class TestCompatibility(unittest.TestCase):
                         self.assertEqual(
                             hashlib.sha256(recovered.read_bytes()).hexdigest(), expected_hash
                         )
+                    for relative_path in manifest["unavailable_inputs"]:
+                        self.assertFalse(
+                            (output / relative_path).exists(),
+                            f"Unexpected original for compiler-omitted input: {relative_path}",
+                        )
                     recovered_assets = sorted(
                         hashlib.sha256(artifact.path.read_bytes()).hexdigest()
                         for artifact in result.files
@@ -100,7 +105,7 @@ class TestCompatibility(unittest.TestCase):
                             source_map["sources"], source_map["sourcesContent"]
                         ):
                             if content is not None:
-                                recovered_sources[path] = hashlib.sha256(
+                                recovered_sources[path.replace("\\", "/")] = hashlib.sha256(
                                     content.encode("utf-8")
                                 ).hexdigest()
                     self.assertTrue(has_mappings)

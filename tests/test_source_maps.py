@@ -65,6 +65,18 @@ class TestSourceMaps(unittest.TestCase):
         self.assertEqual(parsed.mappings, "AAAA")
         self.assertEqual(parsed.to_dict()["sourcesContent"], [None, ""])
 
+    def test_compact_windows_paths_and_crlf_are_preserved(self) -> None:
+        path = r"src\unicode.ts"
+        content = "// café / 日本語 / 🐇\r\nexport const value = 1;\r\n"
+        data = compact(
+            [path], [zstd.ZstdCompressor().compress(content.encode("utf-8"))], b"AAAA"
+        )
+        parsed = read_source_map(data, Limits(), include_mappings=True)
+        self.assertEqual(parsed.sources[0].path, path)
+        self.assertEqual(parsed.sources[0].content, content.encode("utf-8"))
+        self.assertEqual(parsed.to_dict()["sources"], [path])
+        self.assertEqual(parsed.to_dict()["sourcesContent"], [content])
+
     def test_legacy_zstd_metadata_and_null(self) -> None:
         original = {
             "version": 3,

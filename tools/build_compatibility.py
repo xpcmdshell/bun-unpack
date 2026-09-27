@@ -168,20 +168,29 @@ def build_version(version: str, bun: Path, workspace: Path, environment: dict[st
         source_warnings: list[str] = []
         if case == "assets":
             sources = ["assets.ts"]
-            if version in EMPTY_ASSET_OMITTED_IN:
+            # Linux 0.6.0/1.0.0 also omit the empty source-map entry that
+            # their macOS builds retain. Verified in native CI binaries:
+            # three module records, three map sources, empty_default = {}.
+            empty_asset_omitted = version in EMPTY_ASSET_OMITTED_IN or (
+                platform.system() == "Linux" and version in {"0.6.0", "1.0.0"}
+            )
+            if empty_asset_omitted:
                 assets.remove("assets/empty.svg")
                 unavailable_inputs["assets/empty.svg"] = (
                     "Compiler omitted the empty asset's module and source-map entry"
                 )
-                transformed_inputs["assets/empty.svg"] = ["assets/empty.svg"]
+                transformed_inputs["assets/empty.svg"] = [
+                    "assets/empty.svg",
+                    "var empty_default = {};",
+                ]
             if version_tuple(version) < (1, 1, 22):
                 # The old module table omits the empty asset, but its complete
                 # contents survive in the legacy sourcemap as an original source.
-                if version not in EMPTY_ASSET_OMITTED_IN:
+                if not empty_asset_omitted:
                     assets.remove("assets/empty.svg")
                     sources.append("assets/empty.svg")
                 source_warnings.append(
-                    "Non-text source-map copy of assets/binary.png ignored; embedded assets retained"
+                    f"Non-text source-map copy of {Path('assets/binary.png')} ignored; embedded assets retained"
                 )
         elif case == "web":
             sources = ["web.ts", "web/client.ts"]
