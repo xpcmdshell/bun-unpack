@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from bun_unpack.errors import UnsafePathError
-from bun_unpack.paths import normalize_relative_path, safe_join
+from bun_unpack.paths import normalize_module_path, normalize_relative_path, safe_join
 
 
 class TestPaths(unittest.TestCase):
@@ -20,6 +20,14 @@ class TestPaths(unittest.TestCase):
     def test_normalize_relative_path_rejects_empty(self):
         with self.assertRaises(UnsafePathError):
             normalize_relative_path("")
+
+    def test_real_root_directory_is_not_a_virtual_prefix(self):
+        self.assertEqual(normalize_relative_path("root/project/a.ts"), "root/project/a.ts")
+        self.assertEqual(normalize_module_path("/$bunfs/root/root/a.ts"), "root/a.ts")
+
+    def test_module_paths_cannot_escape_the_virtual_root(self):
+        with self.assertRaises(UnsafePathError):
+            normalize_module_path("/$bunfs/root/../outside.js")
 
     def test_safe_join_stays_within_base(self):
         base = Path("/tmp/out")
