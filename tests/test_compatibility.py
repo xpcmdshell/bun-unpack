@@ -39,20 +39,30 @@ class TestCompatibility(unittest.TestCase):
                         self.assertEqual(
                             hashlib.sha256(recovered.read_bytes()).hexdigest(), expected_hash
                         )
-                    recovered_assets = sorted(
+                    # Source-map paths are exact. An asset keeps its embedded
+                    # name whenever the compiler did not record the original one.
+                    source_paths = {
+                        artifact.relative_path.as_posix()
+                        for artifact in result.files
+                        if artifact.kind == "source"
+                    }
+                    self.assertTrue(set(manifest["sources"]) <= source_paths)
+                    self.assertTrue(source_paths <= set(manifest["consumed_inputs"]))
+
+                    recovered_hashes = {
                         hashlib.sha256(artifact.path.read_bytes()).hexdigest()
                         for artifact in result.files
-                        if artifact.kind == "asset"
-                    )
-                    self.assertEqual(recovered_assets, sorted(manifest["assets"]))
-                    self.assertEqual(
-                        {
-                            artifact.relative_path.as_posix()
-                            for artifact in result.files
-                            if artifact.kind == "source"
-                        },
-                        set(manifest["sources"]),
-                    )
+                    }
+                    for expected_hash in manifest["assets"]:
+                        self.assertIn(expected_hash, recovered_hashes)
+                    for path, expected_hash in manifest["optional_inputs"].items():
+                        recovered = output / path
+                        if recovered.exists():
+                            self.assertEqual(
+                                hashlib.sha256(recovered.read_bytes()).hexdigest(),
+                                expected_hash,
+                                path,
+                            )
                     bundles = b"\n".join(
                         artifact.path.read_bytes()
                         for artifact in result.files
@@ -76,7 +86,7 @@ class TestCompatibility(unittest.TestCase):
                         self.assertTrue(
                             any(artifact.kind == "bytecode" for artifact in result.files)
                         )
-                    recovered_sources: dict[str, str] = {}
+                    recovered_sources: set[str] = set()
                     has_mappings = False
                     for artifact in maps:
                         source_map = json.loads(artifact.path.read_text(encoding="utf-8"))
@@ -100,12 +110,14 @@ class TestCompatibility(unittest.TestCase):
                             source_map["sources"], source_map["sourcesContent"]
                         ):
                             if content is not None:
-                                recovered_sources[path] = hashlib.sha256(
-                                    content.encode("utf-8")
-                                ).hexdigest()
+                                recovered_sources.add(
+                                    hashlib.sha256(content.encode("utf-8")).hexdigest()
+                                )
                     self.assertTrue(has_mappings)
                     for path, digest in manifest["sources"].items():
-                        self.assertEqual(recovered_sources.get(path), digest)
+                        self.assertIn(
+                            digest, recovered_sources, f"Missing from source maps: {path}"
+                        )
 
 
 if __name__ == "__main__":

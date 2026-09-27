@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import struct
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from bun_unpack.errors import BunUnpackError
 from bun_unpack.formats import load_graph
 
 FIXTURES = Path(os.environ.get("BUN_UNPACK_FIXTURES", "build/compatibility/fixtures"))
+NATIVE_CONTAINER = {"Darwin": "macho", "Linux": "elf", "Windows": "pe"}[platform.system()]
 CROSS = FIXTURES.parent / "cross"
 RELEASES = (
     ("0.6.0", 32, 24),
@@ -74,7 +76,7 @@ def _modern_elf(optional: bytes, flags: int) -> bytes:
 
 
 class TestFormats(unittest.TestCase):
-    def test_real_macho_graphs(self) -> None:
+    def test_real_native_graphs(self) -> None:
         if not any(FIXTURES.glob("*/sources/sample")):
             self.skipTest("Generate local corpus with python -m tools.build_compatibility")
         for version, stride, footer in RELEASES:
@@ -83,7 +85,7 @@ class TestFormats(unittest.TestCase):
                 continue
             with self.subTest(version=version):
                 graph = load_graph(path, Limits())
-                self.assertEqual(graph.format.container, "macho")
+                self.assertEqual(graph.format.container, NATIVE_CONTAINER)
                 self.assertEqual(
                     (graph.format.record_size, graph.format.footer_size),
                     (stride, footer),
