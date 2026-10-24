@@ -87,7 +87,10 @@ def portable_bun(version: str, workspace: Path, import_dir: Path | None = None) 
             url = f"https://github.com/oven-sh/bun/releases/download/bun-v{version}/{archive_name}.zip"
             print(f"Downloading portable Bun {version} to {destination.parent}", flush=True)
             archive = Path(temporary) / "bun.zip"
-            with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as output:
+            with (
+                urllib.request.urlopen(url, timeout=60) as response,
+                archive.open("wb") as output,
+            ):
                 total = 0
                 while chunk := response.read(1024 * 1024):
                     total += len(chunk)

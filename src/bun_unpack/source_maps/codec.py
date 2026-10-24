@@ -104,7 +104,9 @@ def _validate_vlq(mappings: str, sources_count: int, names_count: int) -> None:
                 original_line += values[2]
                 original_column += values[3]
                 if not 0 <= source < sources_count or original_line < 0 or original_column < 0:
-                    raise BunUnpackError("VLQ mapping references an invalid source or coordinate")
+                    raise BunUnpackError(
+                        "VLQ mapping references an invalid source or coordinate"
+                    )
                 if len(values) == 5:
                     name += values[4]
                     if not 0 <= name < names_count:
@@ -123,16 +125,18 @@ def _mapping_warnings(mappings: str, sources_count: int, names_count: int) -> tu
 def _normalize_legacy_escapes(raw: bytes, max_bytes: int) -> bytes:
     """Normalize Bun's JS-only ``\\v`` escape while lexing JSON strings."""
     normalized = bytearray()
+    projected_size = len(raw)
     in_string = False
     escaped = False
     for character in raw:
         if in_string:
             if escaped:
                 if character == ord("v"):
+                    projected_size += 4
+                    if projected_size > max_bytes:
+                        raise BunUnpackError("Source map JSON exceeds total byte limit")
                     normalized[-1:] = b"\\u000b"
                     escaped = False
-                    if len(normalized) > max_bytes:
-                        raise BunUnpackError("Source map JSON exceeds total byte limit")
                     continue
                 escaped = False
             elif character == ord("\\"):
@@ -147,15 +151,15 @@ def _normalize_legacy_escapes(raw: bytes, max_bytes: int) -> bytes:
 
 def _legacy(data: bytes, limits: Limits, include_mappings: bool) -> SourceMap:
     raw = _decompress(data, limits.max_total_bytes)
+    # Bun historically inserted raw asset bytes directly into JSON strings.
+    # Surrogateescape retains those bytes without corrupting binary assets.
+    text = _normalize_legacy_escapes(raw, limits.max_total_bytes).decode(
+        "utf-8", errors="surrogateescape"
+    )
     try:
-        # Bun historically inserted raw asset bytes directly into JSON strings.
-        # Surrogateescape retains those bytes without corrupting binary assets.
-        text = _normalize_legacy_escapes(raw, limits.max_total_bytes).decode(
-            "utf-8", errors="surrogateescape"
-        )
         document = json.loads(text, strict=False)
-    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
-        raise BunUnpackError("Invalid UTF-8 source map JSON") from exc
+    except (ValueError, RecursionError) as exc:
+        raise BunUnpackError("Invalid source map JSON") from exc
     if not isinstance(document, dict) or document.get("version") != 3:
         raise BunUnpackError("Expected version 3 source map JSON")
     paths = document.get("sources")
@@ -187,7 +191,9 @@ def _legacy(data: bytes, limits: Limits, include_mappings: bool) -> SourceMap:
         total_bytes = 0
         for path, content in zip(paths, contents):
             source_bytes = (
-                content.encode("utf-8", errors="surrogateescape") if content is not None else None
+                content.encode("utf-8", errors="surrogateescape")
+                if content is not None
+                else None
             )
             if source_bytes is not None:
                 if len(source_bytes) > limits.max_file_bytes:
@@ -289,7 +295,9 @@ def _parse(
     return _compact(data, limits, include_mappings, include_contents=include_contents)
 
 
-def read_source_map(data: bytes, limits: Limits, *, include_mappings: bool = False) -> SourceMap:
+def read_source_map(
+    data: bytes, limits: Limits, *, include_mappings: bool = False
+) -> SourceMap:
     """Read a complete embedded source-map blob, enforcing decompression limits."""
     return _parse(data, limits, include_mappings=include_mappings, include_contents=True)
 

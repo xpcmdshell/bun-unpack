@@ -31,8 +31,17 @@ bun-unpack /path/to/executable --bundle -o out/
 ```bash
 git clone git@github.com:xpcmdshell/bun-unpack.git
 cd bun-unpack
-uv run bun-unpack /path/to/executable   # runs tool
-uv run python -m unittest discover tests # runs tests
+uv sync --locked
+uv run --locked bun-unpack /path/to/executable
+uv run --locked ruff format --check src tests tools
+uv run --locked ruff check src tests tools
+uv run --locked python -m unittest discover -s tests -v
+```
+
+Build the historical compatibility corpus before running the full recovery checks:
+
+```bash
+uv run --locked python -m tools.build_compatibility
 ```
 
 ## License

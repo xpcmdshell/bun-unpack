@@ -69,7 +69,6 @@ def decode_internal_map(data: bytes, sources_count: int, max_output_bytes: int) 
 
     previous_line = previous_column = previous_source = 0
     previous_original_line = previous_original_column = 0
-    current_line = 0
     segments: list[str] = []
     output_bytes = 0
     seen = 0
@@ -77,8 +76,7 @@ def decode_internal_map(data: bytes, sources_count: int, max_output_bytes: int) 
 
     def emit(state: tuple[int, int, int, int, int]) -> None:
         nonlocal previous_line, previous_column, previous_source
-        nonlocal previous_original_line, previous_original_column
-        nonlocal current_line, output_bytes
+        nonlocal previous_original_line, previous_original_column, output_bytes
         line, column, source, original_line, original_column = state
         if (
             not 0 <= source < sources_count
@@ -89,14 +87,13 @@ def decode_internal_map(data: bytes, sources_count: int, max_output_bytes: int) 
         if line < previous_line or (line == previous_line and column < previous_column):
             raise BunUnpackError("InternalSourceMap mappings are out of order")
         separator = ""
-        if line > current_line:
-            gap = line - current_line
+        if line > previous_line:
+            gap = line - previous_line
             if gap > max_output_bytes - output_bytes:
                 raise BunUnpackError("InternalSourceMap mapping output exceeds limit")
             separator = ";" * gap
             previous_column = 0
-            current_line = line
-        elif seen > 0:
+        elif segments:
             separator = ","
         segment = "".join(
             (
@@ -135,7 +132,9 @@ def decode_internal_map(data: bytes, sources_count: int, max_output_bytes: int) 
             raise BunUnpackError("Invalid InternalSourceMap window header")
         if window_count != min(64, count - seen):
             raise BunUnpackError("InternalSourceMap mapping count mismatch")
-        gen_line_mask, orig_line_mask, orig_col_mask = struct.unpack_from("<QQQ", data, start + 8)
+        gen_line_mask, orig_line_mask, orig_col_mask = struct.unpack_from(
+            "<QQQ", data, start + 8
+        )
         delta_mask = (1 << (window_count - 1)) - 1
         if (gen_line_mask | orig_line_mask | orig_col_mask) & ~delta_mask:
             raise BunUnpackError("Invalid InternalSourceMap equality mask")
@@ -190,7 +189,9 @@ def decode_internal_map(data: bytes, sources_count: int, max_output_bytes: int) 
             if _bit(orig_col_mask, delta_index):
                 original_col_delta = column_delta
             else:
-                original_col_delta, original_col_pos = _varint(data, original_col_pos, orig_col_end)
+                original_col_delta, original_col_pos = _varint(
+                    data, original_col_pos, orig_col_end
+                )
             if not _bit(source_mask, delta_index):
                 source_delta, rare_pos = _varint(data, rare_pos, stream_end)
                 source += source_delta

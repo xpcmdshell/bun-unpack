@@ -75,7 +75,9 @@ class TestCompatibility(unittest.TestCase):
                 unpacker = BunUnpacker(manifest_path.parent / manifest["executable"])
                 with tempfile.TemporaryDirectory() as temporary:
                     result = unpacker.unpack(Path(temporary), mode="bundle")
-                    maps = [artifact for artifact in result.files if artifact.kind == "sourcemap"]
+                    maps = [
+                        artifact for artifact in result.files if artifact.kind == "sourcemap"
+                    ]
                     self.assertTrue(maps)
                     if "bytecode" in manifest["case"]:
                         self.assertTrue(
@@ -92,7 +94,9 @@ class TestCompatibility(unittest.TestCase):
                         if result.warnings:
                             self.assertTrue(
                                 all(
-                                    warning.startswith("Embedded source map mappings are invalid:")
+                                    warning.startswith(
+                                        "Embedded source map mappings are invalid:"
+                                    )
                                     for warning in result.warnings
                                 )
                             )

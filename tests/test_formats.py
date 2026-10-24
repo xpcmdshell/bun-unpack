@@ -176,7 +176,9 @@ class TestFormats(unittest.TestCase):
 
     def test_28_byte_loader_enum_without_version_marker(self) -> None:
         name = b"compiled://root/config.toml\0"
-        record = struct.pack("<IIIIII", 0, len(name), len(name), 4, 0, 0) + bytes([1, 7, 255, 255])
+        record = struct.pack("<IIIIII", 0, len(name), len(name), 4, 0, 0) + bytes(
+            [1, 7, 255, 255]
+        )
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "sample"
             path.write_bytes(_appended_elf(record, name + b"a=1\n"))

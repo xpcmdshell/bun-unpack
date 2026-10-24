@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ._model import ExtractionMode
 from .api import BunUnpacker
 from .errors import BunUnpackError
 
@@ -14,22 +15,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Recover source files and assets from Bun compiled executables",
     )
-    parser.add_argument("executable", type=Path, help="Bun executable to inspect without running")
+    parser.add_argument(
+        "executable", type=Path, help="Bun executable to inspect without running"
+    )
     parser.add_argument("-o", "--output", type=Path, dest="output_dir")
     parser.add_argument("-v", "--verbose", action="store_true", help="List recovered files")
     parser.add_argument(
         "-n", "--dry-run", action="store_true", help="Inspect without writing files"
     )
     parser.add_argument(
-        "--bundle", action="store_true", help="Export bundles, source maps, and bytecode metadata"
+        "--bundle",
+        action="store_true",
+        help="Export bundles, source maps, and bytecode metadata",
     )
-    parser.add_argument("--no-assets", action="store_true", help="Do not extract embedded assets")
+    parser.add_argument(
+        "--no-assets", action="store_true", help="Do not extract embedded assets"
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    mode = "bundle" if args.bundle else "sources"
+    mode: ExtractionMode = "bundle" if args.bundle else "sources"
     suffix = "_bundle" if args.bundle else "_src"
     output = args.output_dir or Path(args.executable.stem + suffix)
     try:

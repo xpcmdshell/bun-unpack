@@ -56,7 +56,10 @@ class TestRecoverySafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             unpacker = source_unpacker(
-                root, ["src/empty.ts", "src/unicode.ts"], ["", "日本語\r\n"], source_root="project"
+                root,
+                ["src/empty.ts", "src/unicode.ts"],
+                ["", "日本語\r\n"],
+                source_root="project",
             )
             result = unpacker.unpack(root / "output")
             self.assertEqual((root / "output/project/src/empty.ts").read_bytes(), b"")
@@ -122,7 +125,9 @@ class TestRecoverySafety(unittest.TestCase):
             self.assertEqual(len(sources), 2)
             self.assertEqual({file.path.read_bytes() for file in sources}, {b"outer", b"inner"})
             self.assertEqual(len({file.path for file in sources}), 2)
-            self.assertTrue(all(file.relative_path.parts[0] == "_source_roots" for file in sources))
+            self.assertTrue(
+                all(file.relative_path.parts[0] == "_source_roots" for file in sources)
+            )
             self.assertTrue(result.warnings)
 
     def test_existing_different_file_is_not_overwritten(self):
@@ -189,7 +194,9 @@ class TestRecoverySafety(unittest.TestCase):
     def test_limits_fail_before_publishing(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            unpacker = source_unpacker(root, ["a.ts"], ["x" * 100], limits=Limits(max_file_bytes=8))
+            unpacker = source_unpacker(
+                root, ["a.ts"], ["x" * 100], limits=Limits(max_file_bytes=8)
+            )
             with self.assertRaises(BunUnpackError):
                 unpacker.unpack(root / "output")
             self.assertFalse((root / "output").exists())
