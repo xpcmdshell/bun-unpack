@@ -17,3 +17,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bun_unpack"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 96
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.2",
+]

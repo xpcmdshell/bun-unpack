@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._model import FormatInfo, Limits
+from ._model import ArtifactKind, ExtractionMode, FormatInfo, Limits
 from .errors import BunUnpackError
 from .formats import load_graph
 from .paths import normalize_relative_path, safe_join
@@ -18,7 +18,7 @@ from .recovery import Recovery
 @dataclass(frozen=True)
 class RecoveredFile:
     path: Path
-    kind: str
+    kind: ArtifactKind
     size: int
     embedded_path: str | None
     relative_path: Path
@@ -82,7 +82,7 @@ class BunUnpacker:
         self,
         output_dir: str | Path,
         *,
-        mode: str = "sources",
+        mode: ExtractionMode = "sources",
         include_assets: bool = True,
         dry_run: bool = False,
     ) -> UnpackReport:
@@ -93,7 +93,9 @@ class BunUnpacker:
         except OSError as error:
             raise BunUnpackError(f"Cannot extract files: {error}") from error
 
-    def _unpack(self, output: Path, mode: str, include_assets: bool, dry_run: bool) -> UnpackReport:
+    def _unpack(
+        self, output: Path, mode: ExtractionMode, include_assets: bool, dry_run: bool
+    ) -> UnpackReport:
         self._check_executable()
         recovery = Recovery(self._graph, self.limits, mode, include_assets)
         files: dict[str, RecoveredFile] = {}

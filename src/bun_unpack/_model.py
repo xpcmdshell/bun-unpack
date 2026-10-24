@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Literal, TypeAlias
 
 from .errors import BunUnpackError
+
+ExtractionMode: TypeAlias = Literal["sources", "bundle"]
+ArtifactKind: TypeAlias = Literal[
+    "source", "asset", "bundle", "sourcemap", "bytecode", "module-info"
+]
 
 
 @dataclass(frozen=True)

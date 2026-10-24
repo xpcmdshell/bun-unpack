@@ -4,7 +4,25 @@ on:
   push:
   pull_request:
 
+env:
+  UV_PYTHON: "3.10"
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: astral-sh/setup-uv@v3
+      - name: Install
+        run: uv sync --locked
+      - name: Check formatting
+        run: uv run --locked ruff format --check src tests tools
+      - name: Lint
+        run: uv run --locked ruff check src tests tools
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -18,14 +36,14 @@ jobs:
           python-version: "3.10"
       - uses: astral-sh/setup-uv@v3
       - name: Install
-        run: uv sync --frozen
+        run: uv sync --locked
       - name: Test
         shell: bash
         env:
           BUN_UNPACK_REQUIRE_FIXTURES: "1"
         run: |
-          uv run python -m tools.build_compatibility
-          uv run python -m unittest discover -s tests -v
+          uv run --locked python -m tools.build_compatibility
+          uv run --locked python -m unittest discover -s tests -v
       - name: Preserve failing compatibility fixtures
         if: failure()
         uses: actions/upload-artifact@v4

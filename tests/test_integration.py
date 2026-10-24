@@ -62,7 +62,9 @@ class TestIntegration(unittest.TestCase):
             outfile = td_path / "sample"
 
             # bun build --compile writes a native executable.
-            _run([bun, "build", "--compile", "index.ts", "--outfile", str(outfile)], cwd=td_path)
+            _run(
+                [bun, "build", "--compile", "index.ts", "--outfile", str(outfile)], cwd=td_path
+            )
 
             exe = outfile
             if not exe.exists() and os.name == "nt":

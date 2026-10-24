@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import BinaryIO
 
@@ -46,7 +46,9 @@ LOADERS_YAML = LOADERS_JSONC + ("yaml",)
 LOADERS_JSON5 = LOADERS_YAML + ("json5",)
 LOADERS_MD = LOADERS_JSON5 + ("md",)
 LOADERS_XML = LOADERS_MD + ("xml",)
-VERSION_MARKER = re.compile(rb"(?<![\w.])(\d{1,2}\.\d{1,2}\.\d{1,3})\+[a-f0-9]{9,40}(?![a-f0-9])")
+VERSION_MARKER = re.compile(
+    rb"(?<![\w.])(\d{1,2}\.\d{1,2}\.\d{1,3})\+[a-f0-9]{9,40}(?![a-f0-9])"
+)
 VERSION_PROBE_BYTES = 16 * 1024 * 1024
 
 
@@ -63,6 +65,19 @@ RECORD_LAYOUTS = (
     RecordLayout(36, 4, 32),
     RecordLayout(52, 6, 48),
 )
+
+
+@dataclass(frozen=True)
+class _Footer:
+    footer_size: int
+    graph_start: int
+    graph_size: int
+    table_offset: int
+    table_size: int
+    entry_id: int
+    argv_offset: int
+    argv_length: int
+    flags: int
 
 
 @dataclass(frozen=True)
@@ -117,115 +132,177 @@ def _matches_version(candidate: Candidate, stride: int, footer_size: int, versio
     )
 
 
-def decode(path: Path, candidate: Candidate, limits: Limits, file_size: int) -> list[ModuleGraph]:
+@dataclass
+class _RuntimeMarkers:
+    """Cache runtime evidence across layout attempts within one envelope."""
+
+    markers: set[str] = field(default_factory=set)
+    tail_checked: bool = False
+    full_checked: bool = False
+
+    def resolve(
+        self, stream: BinaryIO, file_size: int, graph_start: int, stride: int
+    ) -> tuple[str | None, str | None]:
+        tail_start = max(0, graph_start - VERSION_PROBE_BYTES)
+        if not self.tail_checked:
+            self.markers.update(_version_markers(stream, tail_start, graph_start, file_size))
+            self.tail_checked = True
+        if len(self.markers) != 1 and stride in (36, 52) and not self.full_checked:
+            self.markers.update(_version_markers(stream, 0, tail_start, file_size))
+            self.full_checked = True
+        if len(self.markers) == 1:
+            version, _, revision = next(iter(self.markers)).partition("+")
+            return version, revision
+        return None, None
+
+
+def decode(
+    path: Path, candidate: Candidate, limits: Limits, file_size: int
+) -> list[ModuleGraph]:
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
-    markers: set[str] = set()
-    tail_checked = False
-    full_checked = False
+    runtime_markers = _RuntimeMarkers()
     with path.open("rb") as stream:
-        end = candidate.end
-        if read_range(stream, end - 16, 16, file_size) != TRAILER:
+        if read_range(stream, candidate.end - 16, 16, file_size) != TRAILER:
             raise BunUnpackError("Missing Bun graph trailer")
         for footer_size in (24, 32):
-            footer_start = end - 16 - footer_size
-            if footer_start < candidate.start:
+            footer = _decode_footer(stream, candidate, file_size, footer_size, limits)
+            if footer is None:
                 continue
-            footer = read_range(stream, footer_start, footer_size, file_size)
-            byte_count = struct.unpack_from("<Q", footer)[0]
-            if byte_count == 0 or byte_count > footer_start - candidate.start:
-                continue
-            graph_start = footer_start - byte_count
-            if not candidate.appended and graph_start != candidate.start:
-                continue
-            table_offset, table_size, entry_id = struct.unpack_from("<III", footer, 8)
-            if table_size == 0 or table_size > limits.max_modules * 52:
-                continue
-            if table_offset > byte_count or table_size > byte_count - table_offset:
-                continue
-            if footer_size == 32:
-                argv_offset, argv_length, flags = struct.unpack_from("<III", footer, 20)
-                if argv_length:
-                    try:
-                        _range(argv_offset, argv_length, byte_count, "Compile argv")
-                    except BunUnpackError:
-                        continue
-                # 32-byte footer cannot predate argv or contain a counterfeit table.
-            else:
-                argv_offset = argv_length = flags = 0
             for layout in RECORD_LAYOUTS:
-                if layout.stride == 52 and footer_size != 32:
-                    continue
-                if table_size % layout.stride:
-                    continue
-                count = table_size // layout.stride
-                if count == 0 or count > limits.max_modules or entry_id >= count:
-                    continue
                 try:
-                    modules = _modules(
+                    graph = _decode_layout(
                         stream,
                         path,
                         file_size,
-                        graph_start,
-                        byte_count,
-                        table_offset,
-                        count,
+                        candidate,
+                        footer,
                         layout,
                         limits,
+                        runtime_markers,
                     )
-                    exec_argv = (
-                        read_range(stream, graph_start + argv_offset, argv_length, file_size)
-                        if argv_length
-                        else b""
-                    )
-                    tail_start = max(0, graph_start - VERSION_PROBE_BYTES)
-                    if not tail_checked:
-                        markers.update(_version_markers(stream, tail_start, graph_start, file_size))
-                        tail_checked = True
-                    if len(markers) != 1 and layout.stride in (36, 52) and not full_checked:
-                        markers.update(_version_markers(stream, 0, tail_start, file_size))
-                        full_checked = True
-                    hint = revision = None
-                    if len(markers) == 1:
-                        hint, _, revision = next(iter(markers)).partition("+")
-                    if hint is not None and not _matches_version(
-                        candidate, layout.stride, footer_size, hint
-                    ):
-                        failures.append("Runtime marker conflicts with the graph profile")
-                        continue
-                    if layout.stride == 52:
-                        if flags & ~0x7FF:
-                            raise BunUnpackError("Unknown Bun graph flag bits")
-                        _validate_optional_records(
-                            stream,
-                            file_size,
-                            graph_start,
-                            byte_count,
-                            table_offset + table_size,
-                            count,
-                            flags,
-                            limits,
-                        )
-                    variants = _interpret(modules, layout.stride, hint, flags, entry_id)
                 except BunUnpackError as error:
                     failures.append(str(error))
                     continue
-                for variant in variants:
-                    graphs.append(
-                        ModuleGraph(
-                            variant,
-                            FormatInfo(
-                                candidate.container, layout.stride, footer_size, hint, revision
-                            ),
-                            exec_argv,
-                        )
-                    )
+                if graph is not None:
+                    graphs.append(graph)
     if not graphs:
         detail = "; ".join(dict.fromkeys(failures))[:300]
         raise BunUnpackError(
             f"No valid graph profile in {candidate.container} envelope: {detail or 'invalid footer or table'}"
         )
     return graphs
+
+
+def _decode_footer(
+    stream: BinaryIO,
+    candidate: Candidate,
+    file_size: int,
+    footer_size: int,
+    limits: Limits,
+) -> _Footer | None:
+    """Read and check footer bounds without assuming a module record layout."""
+    footer_start = candidate.end - 16 - footer_size
+    if footer_start < candidate.start:
+        return None
+    footer = read_range(stream, footer_start, footer_size, file_size)
+    graph_size = struct.unpack_from("<Q", footer)[0]
+    if graph_size == 0 or graph_size > footer_start - candidate.start:
+        return None
+    graph_start = footer_start - graph_size
+    if not candidate.appended and graph_start != candidate.start:
+        return None
+    table_offset, table_size, entry_id = struct.unpack_from("<III", footer, 8)
+    if table_size == 0 or table_size > limits.max_modules * 52:
+        return None
+    if table_offset > graph_size or table_size > graph_size - table_offset:
+        return None
+    if footer_size == 32:
+        argv_offset, argv_length, flags = struct.unpack_from("<III", footer, 20)
+        if argv_length:
+            try:
+                _range(argv_offset, argv_length, graph_size, "Compile argv")
+            except BunUnpackError:
+                return None
+    else:
+        argv_offset = argv_length = flags = 0
+    return _Footer(
+        footer_size=footer_size,
+        graph_start=graph_start,
+        graph_size=graph_size,
+        table_offset=table_offset,
+        table_size=table_size,
+        entry_id=entry_id,
+        argv_offset=argv_offset,
+        argv_length=argv_length,
+        flags=flags,
+    )
+
+
+def _decode_layout(
+    stream: BinaryIO,
+    path: Path,
+    file_size: int,
+    candidate: Candidate,
+    footer: _Footer,
+    layout: RecordLayout,
+    limits: Limits,
+    runtime_markers: _RuntimeMarkers,
+) -> ModuleGraph | None:
+    """Try one layout, preserving validation errors for the envelope diagnostic."""
+    if layout.stride == 52 and footer.footer_size != 32:
+        return None
+    if footer.table_size % layout.stride:
+        return None
+    count = footer.table_size // layout.stride
+    if count == 0 or count > limits.max_modules or footer.entry_id >= count:
+        return None
+    records = _modules(
+        stream,
+        path,
+        file_size,
+        footer.graph_start,
+        footer.graph_size,
+        footer.table_offset,
+        count,
+        layout,
+        limits,
+    )
+    exec_argv = (
+        read_range(
+            stream, footer.graph_start + footer.argv_offset, footer.argv_length, file_size
+        )
+        if footer.argv_length
+        else b""
+    )
+    hint, revision = runtime_markers.resolve(
+        stream, file_size, footer.graph_start, layout.stride
+    )
+    if hint is not None and not _matches_version(
+        candidate, layout.stride, footer.footer_size, hint
+    ):
+        raise BunUnpackError("Runtime marker conflicts with the graph profile")
+    if layout.stride == 52:
+        if footer.flags & ~0x7FF:
+            raise BunUnpackError("Unknown Bun graph flag bits")
+        _validate_optional_records(
+            stream,
+            file_size,
+            footer.graph_start,
+            footer.graph_size,
+            footer.table_offset + footer.table_size,
+            count,
+            footer.flags,
+            limits,
+        )
+    modules = _interpret(records, layout.stride, hint, footer.flags, footer.entry_id)
+    if modules is None:
+        return None
+    return ModuleGraph(
+        modules,
+        FormatInfo(candidate.container, layout.stride, footer.footer_size, hint, revision),
+        exec_argv,
+    )
 
 
 def _validate_optional_records(
@@ -292,7 +369,9 @@ def _modules(
             layout.stride,
             file_size,
         )
-        pointers = [struct.unpack_from("<II", record, i * 8) for i in range(layout.pointer_count)]
+        pointers = [
+            struct.unpack_from("<II", record, i * 8) for i in range(layout.pointer_count)
+        ]
         for ptr_index, (offset, length) in enumerate(pointers):
             _range(offset, length, graph_size, f"Module {index} pointer {ptr_index}")
         name_offset, name_length = pointers[0]
@@ -332,7 +411,9 @@ def _modules(
             side = record[layout.enums_at + 3] if layout.pointer_count >= 4 else 0
         if encoding > 2 or loader > 21 or module_format > 2:
             raise BunUnpackError("Unknown module encoding, loader or format")
-        module_info = blob(pointers[4]) if layout.pointer_count == 6 and pointers[4][1] else None
+        module_info = (
+            blob(pointers[4]) if layout.pointer_count == 6 and pointers[4][1] else None
+        )
         origin: str | None = None
         if layout.pointer_count == 6 and pointers[5][1]:
             origin_offset, origin_length = pointers[5]
@@ -373,14 +454,14 @@ def _interpret(
     version: str | None,
     flags: int,
     entry_id: int,
-) -> list[tuple[ModuleRecord, ...]]:
+) -> tuple[ModuleRecord, ...] | None:
     # Distinct enum meanings require runtime corroboration when values overlap.
     release = tuple(map(int, version.split("."))) if version is not None else None
     utf16 = release is not None and release >= (1, 4, 1)
     if release is not None and release >= (1, 3, 3):
         known_bits = 0x7FF if utf16 else 0xF
         if flags & ~known_bits:
-            return []
+            return None
     if release is None:
         loaders = LOADERS_EARLY
     elif release >= (1, 4, 0):
@@ -404,7 +485,7 @@ def _interpret(
         if release is None and record.loader >= 7 and stride not in (28, 32):
             raise BunUnpackError("Loader enum needs a corroborated runtime version")
         if record.loader >= len(loaders):
-            return []
+            return None
         side = record.side
         if stride == 36:
             # Until 1.2.17 this byte was arbitrary padding, not an enum.
@@ -413,7 +494,7 @@ def _interpret(
             if release is None or release < (1, 2, 17):
                 side = 0
         if side > 1:
-            return []
+            return None
         modules.append(
             ModuleRecord(
                 record.path,
@@ -429,4 +510,4 @@ def _interpret(
                 record.bytecode_origin_path,
             )
         )
-    return [tuple(modules)]
+    return tuple(modules)

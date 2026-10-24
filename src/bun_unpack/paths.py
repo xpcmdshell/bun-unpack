@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Path normalization and safe filesystem joins.
 
 The Bun standalone module graph uses virtual paths (e.g. `/$bunfs/`) and
@@ -12,14 +10,14 @@ This module is the only place that interprets an untrusted path string:
 - `safe_join()` prevents directory traversal when writing outputs.
 """
 
+from __future__ import annotations
+
 import posixpath
 import re
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import UnsafePathError
-
-TRAILER = b"\n---- Bun! ----\n"
 
 BUNFS_PREFIX_LEGACY = "compiled://"
 BUNFS_PREFIX_UNIX = "/$bunfs/"

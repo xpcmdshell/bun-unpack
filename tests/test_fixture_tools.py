@@ -51,7 +51,9 @@ class TestFixtureTools(unittest.TestCase):
             with (
                 patch("tools.bun.platform.system", return_value="Darwin"),
                 patch("tools.bun.platform.machine", return_value="arm64"),
-                patch("tools.bun.urllib.request.urlopen", return_value=io.BytesIO(b"not a zip")),
+                patch(
+                    "tools.bun.urllib.request.urlopen", return_value=io.BytesIO(b"not a zip")
+                ),
                 self.assertRaises(zipfile.BadZipFile),
             ):
                 portable_bun("1.4.2", root)

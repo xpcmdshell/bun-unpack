@@ -6,13 +6,13 @@ import hashlib
 import json
 import posixpath
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 
-from ._model import Limits, ModuleGraph, ModuleRecord
+from ._model import ArtifactKind, Blob, ExtractionMode, Limits, ModuleGraph, ModuleRecord
 from .errors import BunUnpackError
 from .paths import normalize_module_path
-from .source_maps import read_source_map, read_source_paths
+from .source_maps import SourceMap, read_source_map, read_source_paths
 from .source_paths import SourceLayout
 
 
@@ -20,7 +20,7 @@ from .source_paths import SourceLayout
 class Artifact:
     path: str
     contents: bytes
-    kind: str
+    kind: ArtifactKind
     embedded_path: str | None = None
 
 
@@ -41,7 +41,9 @@ def restored_bytes(module: ModuleRecord, embedded: bytes) -> bytes:
 
 
 class Recovery:
-    def __init__(self, graph: ModuleGraph, limits: Limits, mode: str, include_assets: bool) -> None:
+    def __init__(
+        self, graph: ModuleGraph, limits: Limits, mode: ExtractionMode, include_assets: bool
+    ) -> None:
         self.graph = graph
         self.limits = limits
         self.mode = mode
@@ -50,7 +52,7 @@ class Recovery:
         self.decoded_bytes = 0
         self.source_count = 0
 
-    def _file_artifact(self, module: ModuleRecord, kind: str) -> Artifact:
+    def _file_artifact(self, module: ModuleRecord, kind: ArtifactKind) -> Artifact:
         embedded = module.contents.read(self.limits.max_file_bytes)
         return Artifact(
             self._output_path(module), restored_bytes(module, embedded), kind, module.path
@@ -87,18 +89,88 @@ class Recovery:
                 raise BunUnpackError("Total source count limit exceeded")
         return SourceLayout(references)
 
+    def _asset_identities(
+        self, standalone: list[ModuleRecord]
+    ) -> dict[tuple[str, str], list[int]]:
+        identities: dict[tuple[str, str], list[int]] = {}
+        for index, module in enumerate(standalone):
+            data = restored_bytes(module, module.contents.read(self.limits.max_file_bytes))
+            key = (hashlib.sha256(data).hexdigest(), PurePosixPath(module.path).suffix)
+            identities.setdefault(key, []).append(index)
+        return identities
+
+    def _decode_source_map(self, blob: Blob) -> SourceMap:
+        remaining = self.limits.max_total_bytes - self.decoded_bytes
+        source_limits = replace(self.limits, max_total_bytes=remaining)
+        source_map = read_source_map(
+            blob.read(self.limits.max_file_bytes),
+            source_limits,
+            include_mappings=self.mode == "bundle",
+        )
+        self.warnings.extend(source_map.warnings)
+        self.source_count += len(source_map.sources)
+        if self.source_count > self.limits.max_sources:
+            raise BunUnpackError("Total source count limit exceeded")
+        self.decoded_bytes += sum(
+            len(source.content) for source in source_map.sources if source.content is not None
+        )
+        return source_map
+
+    def _recover_sources(
+        self,
+        source_map: SourceMap,
+        layout: SourceLayout,
+        asset_identities: dict[tuple[str, str], list[int]],
+        asset_suffixes: set[str],
+        recovered_assets: set[int],
+    ) -> Iterator[Artifact]:
+        """Recover map sources and record uniquely matched standalone assets."""
+        for source in source_map.sources:
+            path = layout.path(source.path, source_map.source_root)
+            if source.content is None:
+                self.warnings.append(
+                    f"No sourcesContent for {source.path}; bundled code retained"
+                )
+                continue
+            key = (hashlib.sha256(source.content).hexdigest(), PurePosixPath(path).suffix)
+            matching_assets = asset_identities.get(key, [])
+            if len(matching_assets) == 1:
+                # A byte-exact identity recovers an original asset path
+                # without guessing how Bun generated its hashed filename.
+                recovered_assets.add(matching_assets[0])
+                if self.include_assets:
+                    yield Artifact(path, source.content, "asset", source.path)
+                continue
+            try:
+                source.content.decode("utf-8")
+            except UnicodeError:
+                if PurePosixPath(path).suffix in asset_suffixes:
+                    self.warnings.append(
+                        f"Non-text source-map copy of {source.path} ignored; embedded assets retained"
+                    )
+                    continue
+            yield Artifact(path, source.content, "source", source.path)
+
+    def _metadata_artifacts(self) -> Iterator[Artifact]:
+        for module in self.graph.modules:
+            path = self._output_path(module)
+            metadata: tuple[tuple[Blob | None, str, ArtifactKind], ...] = (
+                (module.bytecode, ".bytecode", "bytecode"),
+                (module.module_info, ".module-info", "module-info"),
+            )
+            for blob, suffix, kind in metadata:
+                if blob is not None:
+                    yield Artifact(
+                        path + suffix, blob.read(self.limits.max_file_bytes), kind, module.path
+                    )
+
     def artifacts(self) -> Iterator[Artifact]:
         layout = self._source_layout() if self.mode == "sources" else SourceLayout([])
         self.warnings.extend(layout.warnings)
         # Without a source map, `contents` is the artifact itself. With one, the
         # originals are recoverable from the map and `contents` is generated code.
         standalone = [module for module in self.graph.modules if module.sourcemap is None]
-        asset_identities: dict[tuple[str, str], list[int]] = {}
-        if self.mode == "sources":
-            for index, module in enumerate(standalone):
-                data = restored_bytes(module, module.contents.read(self.limits.max_file_bytes))
-                key = (hashlib.sha256(data).hexdigest(), PurePosixPath(module.path).suffix)
-                asset_identities.setdefault(key, []).append(index)
+        asset_identities = self._asset_identities(standalone) if self.mode == "sources" else {}
         recovered_assets: set[int] = set()
         asset_suffixes = {PurePosixPath(module.path).suffix for module in standalone}
 
@@ -107,71 +179,22 @@ class Recovery:
                 continue
             bundle_path = self._output_path(module)
             yield self._file_artifact(module, "bundle")
-            source_limits = Limits(
-                max_file_bytes=self.limits.max_file_bytes,
-                max_total_bytes=self.limits.max_total_bytes - self.decoded_bytes,
-                max_modules=self.limits.max_modules,
-                max_sources=self.limits.max_sources,
-                max_path_bytes=self.limits.max_path_bytes,
-                max_total_path_bytes=self.limits.max_total_path_bytes,
-            )
-            source_map = read_source_map(
-                module.sourcemap.read(self.limits.max_file_bytes),
-                source_limits,
-                include_mappings=self.mode == "bundle",
-            )
-            self.warnings.extend(source_map.warnings)
-            self.source_count += len(source_map.sources)
-            if self.source_count > self.limits.max_sources:
-                raise BunUnpackError("Total source count limit exceeded")
-            self.decoded_bytes += sum(
-                len(source.content) for source in source_map.sources if source.content is not None
-            )
-
+            source_map = self._decode_source_map(module.sourcemap)
             if self.mode == "bundle":
                 encoded_map = (
-                    json.dumps(source_map.to_dict(), ensure_ascii=True, indent=2).encode("utf-8")
+                    json.dumps(source_map.to_dict(), ensure_ascii=True, indent=2).encode(
+                        "utf-8"
+                    )
                     + b"\n"
                 )
                 yield Artifact(bundle_path + ".map", encoded_map, "sourcemap", module.path)
             else:
-                for source in source_map.sources:
-                    path = layout.path(source.path, source_map.source_root)
-                    if source.content is None:
-                        self.warnings.append(
-                            f"No sourcesContent for {source.path}; bundled code retained"
-                        )
-                        continue
-                    key = (hashlib.sha256(source.content).hexdigest(), PurePosixPath(path).suffix)
-                    matching_assets = asset_identities.get(key, [])
-                    if len(matching_assets) == 1:
-                        # A byte-exact identity recovers an original asset path
-                        # without guessing how Bun generated its hashed filename.
-                        recovered_assets.add(matching_assets[0])
-                        if self.include_assets:
-                            yield Artifact(path, source.content, "asset", source.path)
-                        continue
-                    try:
-                        source.content.decode("utf-8")
-                    except UnicodeError:
-                        if PurePosixPath(path).suffix in asset_suffixes:
-                            self.warnings.append(
-                                f"Non-text source-map copy of {source.path} ignored; embedded assets retained"
-                            )
-                            continue
-                    yield Artifact(path, source.content, "source", source.path)
+                yield from self._recover_sources(
+                    source_map, layout, asset_identities, asset_suffixes, recovered_assets
+                )
 
         if self.mode == "bundle":
-            for module in self.graph.modules:
-                path = self._output_path(module)
-                for blob, suffix, kind in (
-                    (module.bytecode, ".bytecode", "bytecode"),
-                    (module.module_info, ".module-info", "module-info"),
-                ):
-                    if blob is not None:
-                        yield Artifact(
-                            path + suffix, blob.read(self.limits.max_file_bytes), kind, module.path
-                        )
+            yield from self._metadata_artifacts()
 
         if self.include_assets:
             for index, module in enumerate(standalone):

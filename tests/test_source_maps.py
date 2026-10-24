@@ -197,14 +197,18 @@ class TestSourceMaps(unittest.TestCase):
         self.assertEqual(parsed.to_dict()["mappings"], bad_mapping)
         self.assertEqual(
             parsed.warnings,
-            ("Embedded source map mappings are invalid: VLQ mapping must have 1, 4, or 5 fields",),
+            (
+                "Embedded source map mappings are invalid: VLQ mapping must have 1, 4, or 5 fields",
+            ),
         )
         default = read_source_map(encoded, Limits())
         self.assertEqual(default.sources[0].content, b"a")
         self.assertEqual(default.warnings, ())
 
     def test_source_paths_inspection_skips_compact_content_decompression(self) -> None:
-        data = compact(["../../packages/shared/src/x.ts", "empty.ts"], [b"not zstd", b""], b"AAAA")
+        data = compact(
+            ["../../packages/shared/src/x.ts", "empty.ts"], [b"not zstd", b""], b"AAAA"
+        )
         self.assertEqual(
             read_source_paths(data, Limits()),
             (("../../packages/shared/src/x.ts", "empty.ts"), ""),

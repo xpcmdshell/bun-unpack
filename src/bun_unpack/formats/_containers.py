@@ -188,7 +188,9 @@ def _elf(stream: BinaryIO, file_size: int) -> list[Candidate]:
     names = read_range(stream, names_offset, names_length, file_size)
     results: list[Candidate] = []
     for index in range(count):
-        section = read_range(stream, section_offset + index * entry_size, minimum_size, file_size)
+        section = read_range(
+            stream, section_offset + index * entry_size, minimum_size, file_size
+        )
         name_offset = struct.unpack_from("<I", section)[0]
         if name_offset >= len(names) or names.find(b"\0", name_offset) < 0:
             raise BunUnpackError("Invalid ELF section name")
@@ -219,7 +221,9 @@ def candidates(path: Path) -> list[Candidate]:
         elif magic == b"\x7fELF":
             container, sections = "elf", _elf(stream, file_size)
         else:
-            raise BunUnpackError("Unsupported executable container (expected Mach-O, PE, or ELF)")
+            raise BunUnpackError(
+                "Unsupported executable container (expected Mach-O, PE, or ELF)"
+            )
         if file_size >= 24 and read_range(stream, file_size - 24, 16, file_size) == TRAILER:
             marker = struct.unpack("<Q", read_range(stream, file_size - 8, 8, file_size))[0]
             if marker == file_size:
