@@ -15,7 +15,7 @@ For a detailed walkthrough of the binary format and extraction process, see the 
 ## Install
 
 ```bash
-uv tool install git+ssh://git@github.com/xpcmdshell/bun-unpack.git
+uv tool install git+https://github.com/xpcmdshell/bun-unpack.git
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ Use Python 3.15 or newer and uv 0.13.5 or newer.
 Install Bun to run the compiler and installed-package integration tests.
 
 ```bash
-git clone git@github.com:xpcmdshell/bun-unpack.git
+git clone https://github.com/xpcmdshell/bun-unpack.git
 cd bun-unpack
 uv sync --locked
 uv run --locked bun-unpack /path/to/executable
