@@ -1,7 +1,5 @@
 """Portable compiler acquisition and isolation for repository tests."""
 
-from __future__ import annotations
-
 import hashlib
 import os
 import platform
@@ -21,11 +19,8 @@ def validate_version(version: str) -> None:
 
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def require_flags(help_text: str, flags: tuple[str, ...]) -> None:

@@ -5,8 +5,6 @@ varints are checked before use; the runtime's own blob validator checks only
 its outer header, which is insufficient for reading an untrusted executable.
 """
 
-from __future__ import annotations
-
 import struct
 
 from bun_unpack.errors import BunUnpackError

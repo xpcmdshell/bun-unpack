@@ -1,7 +1,5 @@
 """Bounded executable-envelope readers; no graph semantics live here."""
 
-from __future__ import annotations
-
 import struct
 from dataclasses import dataclass
 from pathlib import Path

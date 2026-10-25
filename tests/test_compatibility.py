@@ -1,7 +1,5 @@
 """End-to-end recovery checks against real, locally built historical executables."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os

@@ -1,7 +1,5 @@
 """Source-map codecs and byte-preserving recovery."""
 
-from __future__ import annotations
-
 import io
 import json
 import struct

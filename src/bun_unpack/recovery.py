@@ -1,7 +1,5 @@
 """Recover files without exposing Bun's format variants to filesystem code."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import posixpath

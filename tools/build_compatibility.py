@@ -1,7 +1,5 @@
 """Build the recovery corpus with portable Bun releases in an isolated workspace."""
 
-from __future__ import annotations
-
 import argparse
 import hashlib
 import json

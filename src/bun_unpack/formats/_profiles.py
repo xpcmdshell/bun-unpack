@@ -1,7 +1,5 @@
 """Validate historical graph records against explicit ABI profiles."""
 
-from __future__ import annotations
-
 import re
 import struct
 from dataclasses import dataclass, field

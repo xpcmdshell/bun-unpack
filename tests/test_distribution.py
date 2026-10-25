@@ -1,7 +1,5 @@
 """Exercise the distributed CLI outside the source checkout."""
 
-from __future__ import annotations
-
 import os
 import shutil
 import subprocess

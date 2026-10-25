@@ -1,7 +1,5 @@
 """Decode embedded Bun standalone source maps into lossless source artifacts."""
 
-from __future__ import annotations
-
 import json
 import struct
 from dataclasses import dataclass, field
