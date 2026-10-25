@@ -28,21 +28,29 @@ bun-unpack /path/to/executable --bundle -o out/
 
 ## Development
 
+Use uv 0.13.5 or newer. The development environment uses Python 3.15; the package supports Python 3.10 and newer.
+Install Bun to run the compiler and installed-package integration tests.
+
 ```bash
 git clone git@github.com:xpcmdshell/bun-unpack.git
 cd bun-unpack
 uv sync --locked
 uv run --locked bun-unpack /path/to/executable
-uv run --locked ruff format --check src tests tools
-uv run --locked ruff check src tests tools
-uv run --locked python -m unittest discover -s tests -v
+uv run --locked prek install
+uv run --locked prek run --all-files
+uv run --locked python -m pytest
+uv build
 ```
 
 Build the historical compatibility corpus before running the full recovery checks:
 
 ```bash
 uv run --locked python -m tools.build_compatibility
+uv run --locked python -m pytest
 ```
+
+The checks use Ruff for formatting and linting, and ty for type checking.
+The distribution test rebuilds the source archive and exercises the installed CLI in an isolated environment.
 
 ## License
 

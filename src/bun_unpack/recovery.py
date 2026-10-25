@@ -101,6 +101,8 @@ class Recovery:
 
     def _decode_source_map(self, blob: Blob) -> SourceMap:
         remaining = self.limits.max_total_bytes - self.decoded_bytes
+        if remaining <= 0:
+            raise BunUnpackError("Total source-map decoding byte limit exhausted")
         source_limits = replace(self.limits, max_total_bytes=remaining)
         source_map = read_source_map(
             blob.read(self.limits.max_file_bytes),

@@ -40,12 +40,12 @@ LOADERS_EARLY = (
     "sqlite",
     "sqlite_embedded",
 )
-LOADERS_HTML = LOADERS_EARLY + ("html",)
-LOADERS_JSONC = LOADERS_EARLY[:7] + ("jsonc",) + LOADERS_HTML[7:]
-LOADERS_YAML = LOADERS_JSONC + ("yaml",)
-LOADERS_JSON5 = LOADERS_YAML + ("json5",)
-LOADERS_MD = LOADERS_JSON5 + ("md",)
-LOADERS_XML = LOADERS_MD + ("xml",)
+LOADERS_HTML = (*LOADERS_EARLY, "html")
+LOADERS_JSONC = (*LOADERS_EARLY[:7], "jsonc", *LOADERS_HTML[7:])
+LOADERS_YAML = (*LOADERS_JSONC, "yaml")
+LOADERS_JSON5 = (*LOADERS_YAML, "json5")
+LOADERS_MD = (*LOADERS_JSON5, "md")
+LOADERS_XML = (*LOADERS_MD, "xml")
 VERSION_MARKER = re.compile(
     rb"(?<![\w.])(\d{1,2}\.\d{1,2}\.\d{1,3})\+[a-f0-9]{9,40}(?![a-f0-9])"
 )
@@ -433,16 +433,16 @@ def _modules(
                 raise BunUnpackError("Invalid UTF-8 bytecode origin path") from error
         records.append(
             RawRecord(
-                name,
-                contents,
-                sourcemap,
-                bytecode,
-                encoding,
-                loader,
-                module_format,
-                side,
-                module_info,
-                origin,
+                path=name,
+                contents=contents,
+                sourcemap=sourcemap,
+                bytecode=bytecode,
+                encoding=encoding,
+                loader=loader,
+                module_format=module_format,
+                side=side,
+                module_info=module_info,
+                bytecode_origin_path=origin,
             )
         )
     return records
@@ -497,17 +497,17 @@ def _interpret(
             return None
         modules.append(
             ModuleRecord(
-                record.path,
-                record.contents,
-                record.sourcemap,
-                record.bytecode,
-                ("binary", "latin1", "utf16" if utf16 else "utf8")[record.encoding],
-                loaders[record.loader],
-                ("none", "esm", "cjs")[record.module_format],
-                ("server", "client")[side],
-                index == entry_id,
-                record.module_info,
-                record.bytecode_origin_path,
+                path=record.path,
+                contents=record.contents,
+                sourcemap=record.sourcemap,
+                bytecode=record.bytecode,
+                encoding=("binary", "latin1", "utf16" if utf16 else "utf8")[record.encoding],
+                loader=loaders[record.loader],
+                module_format=("none", "esm", "cjs")[record.module_format],
+                side=("server", "client")[side],
+                is_entry_point=index == entry_id,
+                module_info=record.module_info,
+                bytecode_origin_path=record.bytecode_origin_path,
             )
         )
     return tuple(modules)
