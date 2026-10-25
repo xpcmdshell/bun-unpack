@@ -63,8 +63,8 @@ def test_installed_distribution_recovers_sources_and_preserves_existing_files(
 
     source = "import { greeting } from './greeting';\nconsole.log(greeting);\n"
     dependency = "export const greeting = 'Hello, café';\n"
-    (tmp_path / "main.ts").write_text(source, encoding="utf-8")
-    (tmp_path / "greeting.ts").write_text(dependency, encoding="utf-8")
+    (tmp_path / "main.ts").write_bytes(source.encode("utf-8"))
+    (tmp_path / "greeting.ts").write_bytes(dependency.encode("utf-8"))
     executable = tmp_path / ("sample.exe" if os.name == "nt" else "sample")
     run_command(
         [bun, "build", "--compile", "--sourcemap", "main.ts", "--outfile", str(executable)],
