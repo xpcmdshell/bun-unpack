@@ -10,8 +10,6 @@ This module is the only place that interprets an untrusted path string:
 - `safe_join()` prevents directory traversal when writing outputs.
 """
 
-from __future__ import annotations
-
 import posixpath
 import re
 from pathlib import Path, PurePosixPath

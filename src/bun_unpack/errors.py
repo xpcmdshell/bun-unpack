@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 class BunUnpackError(Exception):
     """Base exception for bun-unpack."""
 

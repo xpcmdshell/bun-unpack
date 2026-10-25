@@ -1,7 +1,5 @@
 """Identify Bun executable envelopes and decode historical graph profiles."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from bun_unpack._model import Limits, ModuleGraph

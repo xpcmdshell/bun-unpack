@@ -5,8 +5,6 @@ a continuation bit, so `base64` cannot encode or decode it. Every caller in this
 package shares this one codec.
 """
 
-from __future__ import annotations
-
 from bun_unpack.errors import BunUnpackError
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"

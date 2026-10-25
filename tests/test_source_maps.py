@@ -1,11 +1,10 @@
-"""Source-map codecs and byte-preserving recovery, runnable by unittest CI."""
-
-from __future__ import annotations
+"""Source-map codecs and byte-preserving recovery."""
 
 import io
 import json
 import struct
 import unittest
+from collections.abc import Mapping
 
 import zstandard as zstd
 
@@ -43,8 +42,8 @@ def binary_map() -> bytes:
     return struct.pack("<QQQII", total, 2, 1, 1, 56) + sync + window + b"\x00"
 
 
-def legacy(document: dict[str, object]) -> bytes:
-    return zstd.ZstdCompressor().compress(json.dumps(document).encode())
+def legacy(document: Mapping[str, object]) -> bytes:
+    return zstd.ZstdCompressor().compress(json.dumps(dict(document)).encode())
 
 
 class TestSourceMaps(unittest.TestCase):

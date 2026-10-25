@@ -6,8 +6,6 @@ project onto the same output path are namespaced rather than overwritten or
 silently merged.
 """
 
-from __future__ import annotations
-
 import hashlib
 from collections import defaultdict
 

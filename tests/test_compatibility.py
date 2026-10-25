@@ -1,7 +1,5 @@
 """End-to-end recovery checks against real, locally built historical executables."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os
@@ -106,7 +104,7 @@ class TestCompatibility(unittest.TestCase):
                             len(source_map["sources"]), len(source_map["sourcesContent"])
                         )
                         for path, content in zip(
-                            source_map["sources"], source_map["sourcesContent"]
+                            source_map["sources"], source_map["sourcesContent"], strict=True
                         ):
                             if content is not None:
                                 recovered_sources[path.replace("\\", "/")] = hashlib.sha256(

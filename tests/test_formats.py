@@ -1,7 +1,5 @@
 """Historical graph profiles and bounded executable container readers."""
 
-from __future__ import annotations
-
 import os
 import platform
 import struct

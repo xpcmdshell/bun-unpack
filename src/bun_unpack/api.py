@@ -1,7 +1,5 @@
 """The public extraction API. Container and serialization details stay below it."""
 
-from __future__ import annotations
-
 import hashlib
 import os
 import tempfile
@@ -164,7 +162,9 @@ class BunUnpacker:
             if target.exists():
                 if not target.is_file():
                     raise BunUnpackError(f"Output path is not a file: {target}")
-                if hashlib.sha256(target.read_bytes()).hexdigest() != identities[relative]:
+                with target.open("rb") as stream:
+                    identity = hashlib.file_digest(stream, "sha256").hexdigest()
+                if identity != identities[relative]:
                     raise BunUnpackError(f"Refusing to overwrite a different file: {target}")
         if files and not output.exists():
             os.replace(staging, output)

@@ -3,7 +3,9 @@ name = "bun-unpack"
 version = "0.2.0"
 description = "Extract bundled JavaScript/TypeScript files from Bun compiled executables"
 readme = "README.md"
-requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.15"
 dependencies = [
     "zstandard>=0.25.0",
 ]
@@ -12,20 +14,26 @@ dependencies = [
 bun-unpack = "bun_unpack.cli:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/bun_unpack"]
+[tool.uv.build-backend]
+source-include = ["tests/**", "tools/**"]
 
 [tool.ruff]
-target-version = "py310"
 line-length = 96
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.17.2",
+    "ruff==0.17.2",
+    "ty",
+    "pytest",
+    "prek",
 ]

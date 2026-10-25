@@ -1,7 +1,5 @@
 """Decode embedded Bun standalone source maps into lossless source artifacts."""
 
-from __future__ import annotations
-
 import json
 import struct
 from dataclasses import dataclass, field
@@ -189,7 +187,7 @@ def _legacy(data: bytes, limits: Limits, include_mappings: bool) -> SourceMap:
             text.encode("utf-8")
         sources = []
         total_bytes = 0
-        for path, content in zip(paths, contents):
+        for path, content in zip(paths, contents, strict=True):
             source_bytes = (
                 content.encode("utf-8", errors="surrogateescape")
                 if content is not None
@@ -206,12 +204,12 @@ def _legacy(data: bytes, limits: Limits, include_mappings: bool) -> SourceMap:
         raise BunUnpackError("Invalid Unicode in source map metadata") from exc
     metadata = {key: value for key, value in document.items() if key not in _CORE_FIELDS}
     return SourceMap(
-        tuple(sources),
-        mappings if include_mappings else None,
-        tuple(names),
-        source_root,
-        warnings,
-        metadata,
+        sources=tuple(sources),
+        mappings=mappings if include_mappings else None,
+        names=tuple(names),
+        source_root=source_root,
+        warnings=warnings,
+        metadata=metadata,
     )
 
 
@@ -260,11 +258,19 @@ def _compact(
         if len(mappings) > limits.max_total_bytes:
             raise BunUnpackError("Mapping output exceeds total byte limit")
     used = 0
+    path_bytes = 0
     sources: list[Source] = []
     for index in range(count):
-        name_bytes = _pointer(data, 8 + index * 8, mapping_end)
+        name_offset, name_length = _pointer_bounds(data, 8 + index * 8, mapping_end)
+        path_bytes += name_length
+        # Pointers can repeat one region. Account for each decoded copy before
+        # allocating strings, rather than checking only the encoded blob size.
+        if name_length > limits.max_path_bytes or path_bytes > min(
+            limits.max_total_path_bytes, limits.max_total_bytes
+        ):
+            raise BunUnpackError("Source path metadata exceeds limit")
         try:
-            path = (name_bytes or b"").decode("utf-8")
+            path = data[name_offset : name_offset + name_length].decode("utf-8")
         except UnicodeDecodeError as exc:
             raise BunUnpackError("Invalid UTF-8 source path") from exc
         content_pointer = 8 + count * 8 + index * 8
